@@ -1,0 +1,272 @@
+openapi: 3.0.3
+info:
+  title: MiniBlog API
+  description: API REST para gestión de autores y posts. Proyecto Integrador M2 - Henry.
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:3000
+    description: Servidor local de desarrollo
+
+tags:
+  - name: Authors
+    description: Operaciones sobre autores
+  - name: Posts
+    description: Operaciones sobre publicaciones
+  - name: Health
+    description: Estado del servicio
+
+components:
+  schemas:
+    Author:
+      type: object
+      properties:
+        id:         { type: integer, example: 1 }
+        name:       { type: string,  example: Ana García }
+        email:      { type: string,  format: email, example: ana@example.com }
+        bio:        { type: string,  nullable: true, example: Desarrolladora full-stack }
+        created_at: { type: string,  format: date-time }
+
+    AuthorInput:
+      type: object
+      required: [name, email]
+      properties:
+        name:  { type: string, example: Ana García }
+        email: { type: string, format: email, example: ana@example.com }
+        bio:   { type: string, nullable: true }
+
+    Post:
+      type: object
+      properties:
+        id:         { type: integer, example: 1 }
+        title:      { type: string,  example: Introducción a Node.js }
+        content:    { type: string,  example: Node.js es un runtime de JavaScript... }
+        author_id:  { type: integer, example: 1 }
+        published:  { type: boolean, example: true }
+        created_at: { type: string,  format: date-time }
+
+    PostInput:
+      type: object
+      required: [title, content, author_id]
+      properties:
+        title:     { type: string,  example: Mi nuevo post }
+        content:   { type: string,  example: Contenido del post }
+        author_id: { type: integer, example: 1 }
+        published: { type: boolean, default: false }
+
+    Error:
+      type: object
+      properties:
+        error: { type: string, example: Author not found }
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Verifica que el servicio esté operativo
+      responses:
+        '200':
+          description: Servicio operativo
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:    { type: string, example: ok }
+                  timestamp: { type: string, format: date-time }
+
+  /api/authors:
+    get:
+      tags: [Authors]
+      summary: Lista todos los autores
+      responses:
+        '200':
+          description: Lista de autores
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Author' }
+        '500':
+          description: Error interno
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    post:
+      tags: [Authors]
+      summary: Crea un nuevo autor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthorInput' }
+      responses:
+        '201':
+          description: Autor creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Author' }
+        '400':
+          description: Datos inválidos o email duplicado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/authors/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+        description: ID del autor
+    get:
+      tags: [Authors]
+      summary: Obtiene un autor por ID
+      responses:
+        '200':
+          description: Autor encontrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Author' }
+        '400':
+          description: ID inválido
+        '404':
+          description: Autor no encontrado
+    put:
+      tags: [Authors]
+      summary: Actualiza un autor completo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthorInput' }
+      responses:
+        '200':
+          description: Autor actualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Author' }
+        '400':
+          description: Datos inválidos
+        '404':
+          description: Autor no encontrado
+    delete:
+      tags: [Authors]
+      summary: Elimina un autor y sus posts asociados
+      responses:
+        '200':
+          description: Autor eliminado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Author' }
+        '400':
+          description: ID inválido
+        '404':
+          description: Autor no encontrado
+
+  /api/posts:
+    get:
+      tags: [Posts]
+      summary: Lista todos los posts
+      parameters:
+        - name: published
+          in: query
+          required: false
+          schema: { type: boolean }
+          description: Filtra por estado de publicación
+      responses:
+        '200':
+          description: Lista de posts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Post' }
+    post:
+      tags: [Posts]
+      summary: Crea un nuevo post
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostInput' }
+      responses:
+        '201':
+          description: Post creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Post' }
+        '400':
+          description: Datos inválidos o author_id inexistente
+
+  /api/posts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Posts]
+      summary: Obtiene un post por ID
+      responses:
+        '200':
+          description: Post encontrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Post' }
+        '400':
+          description: ID inválido
+        '404':
+          description: Post no encontrado
+    put:
+      tags: [Posts]
+      summary: Actualiza un post completo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PostInput' }
+      responses:
+        '200':
+          description: Post actualizado
+        '400':
+          description: Datos inválidos
+        '404':
+          description: Post no encontrado
+    delete:
+      tags: [Posts]
+      summary: Elimina un post
+      responses:
+        '200':
+          description: Post eliminado
+        '400':
+          description: ID inválido
+        '404':
+          description: Post no encontrado
+
+  /api/posts/author/{authorId}:
+    parameters:
+      - name: authorId
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [Posts]
+      summary: Lista los posts de un autor con sus datos
+      responses:
+        '200':
+          description: Posts del autor con información del autor incluida
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: '#/components/schemas/Post'
+                    - type: object
+                      properties:
+                        author_name:  { type: string }
+                        author_email: { type: string }
+                        author_bio:   { type: string, nullable: true }
+        '400':
+          description: authorId inválido
