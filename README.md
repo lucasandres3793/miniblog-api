@@ -225,6 +225,59 @@ Para visualizarla:
 
 **Opción 2 — Extensión de VS Code:** instalá "OpenAPI (Swagger) Editor" y abrí el archivo.
 
+
+---
+
+## Deployment en Railway
+
+La aplicación está desplegada en Railway y conectada a una instancia de PostgreSQL administrada por la misma plataforma.
+
+### URLs
+
+| Tipo | Valor | Uso |
+|---|---|---|
+| **Public URL (API)** | `https://miniblog-api-production-9215.up.railway.app` | Acceso a la API desde internet |
+| **Internal URL (base de datos)** | `postgres.railway.internal` | Conexión entre el servicio de la API y PostgreSQL dentro de la red privada de Railway |
+
+La API se conecta a la base de datos por la **URL interna**, no por la pública. El tráfico entre servicios del mismo proyecto viaja por la red privada de Railway: no sale a internet, no consume ancho de banda facturable y no expone la base de datos al exterior.
+
+### Variables de entorno en Railway
+
+El servicio de la API tiene configuradas las mismas cinco variables que define `.env.example`, pero en lugar de valores literales usan referencias al servicio de PostgreSQL: `DB_HOST` toma `${{Postgres.PGHOST}}`, `DB_NAME` toma `${{Postgres.PGDATABASE}}`, `DB_PASSWORD` toma `${{Postgres.PGPASSWORD}}`, `DB_PORT` toma `${{Postgres.PGPORT}}` y `DB_USER` toma `${{Postgres.PGUSER}}`.
+
+La sintaxis de referencia hace que Railway resuelva el valor en tiempo de deploy leyéndolo del servicio referenciado. Se prefirió esto a copiar los valores manualmente: si Railway rota las credenciales o se recrea la base de datos, las referencias se actualizan solas, mientras que un valor pegado a mano quedaría desactualizado y el servicio dejaría de conectar sin causa aparente.
+
+El código de la aplicación es idéntico en local y en producción. Lo único que cambia son estas variables: en desarrollo `DB_HOST` es `localhost`, en producción apunta al host interno de Railway.
+
+### Pasos del deployment
+
+1. **Crear el proyecto y la base de datos.** Desde el dashboard de Railway, crear un proyecto nuevo y agregarle un servicio PostgreSQL.
+
+2. **Conectar el repositorio.** Agregar un segundo servicio desde el repositorio de GitHub. Railway detecta automáticamente que es un proyecto Node.js, ejecuta `npm install` y arranca la aplicación con el script `start` de `package.json`.
+
+3. **Configurar las variables de entorno.** En la pestaña Variables del servicio de la API, definir las cinco variables usando las referencias indicadas arriba. Es importante verificar que no queden espacios en blanco dentro de las comillas: un valor con espacios produce un error de conexión difícil de diagnosticar, porque el nombre de la base no coincide.
+
+4. **Inicializar la base de datos remota.** La base que crea Railway arranca vacía. Para cargar el esquema y los datos de ejemplo hay que ejecutar el contenido de `db/setup.sql` contra ella, desde la interfaz de consultas del servicio PostgreSQL en el panel de Railway. El esquema no viaja con el código: el repositorio contiene el script que crea las tablas, pero alguien tiene que ejecutarlo contra cada base nueva.
+
+5. **Aplicar el deploy.** Railway acumula los cambios de configuración como borrador. Hay que presionar Deploy para que se apliquen. La plataforma levanta un contenedor nuevo, espera a que responda y recién entonces da de baja el anterior, de modo que no hay interrupción del servicio.
+
+Una vez configurado, cada `git push` a la rama `main` dispara un nuevo deploy automáticamente.
+
+ ### Verificación del deploy
+
+La verificación se hace en dos pasos, porque cada uno prueba una cosa distinta.
+
+**1. El servidor responde desde internet.** Una petición GET a `/health` sobre la URL pública devuelve un objeto con `status: ok` y un timestamp. Este endpoint no consulta la base de datos, así que confirma únicamente que Express está levantado y accesible. Un `/health` en verde no implica que la conexión a PostgreSQL funcione.
+
+**2. La conexión a la base de datos funciona.** Una petición GET a `/api/authors` sobre la URL pública devuelve los tres autores cargados por el script de seed. Este endpoint sí atraviesa la cadena completa: Express, router, pool de conexiones y PostgreSQL. Los timestamps difieren de los de la base local, lo que confirma que se trata de dos bases de datos independientes y que la API en producción está leyendo de la de Railway.
+
+### Buenas prácticas aplicadas
+
+- **Credenciales fuera del repositorio.** El archivo `.env` está en `.gitignore`. Solo se versiona `.env.example`, que documenta qué variables necesita el proyecto sin exponer sus valores.
+- **`node_modules` no versionado.** Se reconstruye con `npm install`. La reproducibilidad la garantiza `package-lock.json`, que sí está en el repositorio y fija las versiones exactas de cada dependencia.
+- **Referencias entre servicios** en lugar de valores copiados a mano, para que la configuración no se desactualice.
+- **Conexión por red interna** entre la API y la base de datos, sin exponer PostgreSQL a internet.
+
 ---
 
 ## Decisiones técnicas
